@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ระบบออก Certificate | AC Training Center</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { font-family: 'Kanit', sans-serif; }
+
+    body {
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      min-height: 100vh;
+      padding: 2rem 0 4rem;
+    }
+
+    .main-card {
+      background: #fff;
+      border-radius: 20px;
+      box-shadow: 0 25px 70px rgba(0,0,0,0.4);
+      overflow: hidden;
+    }
+
+    /* ---- Header ---- */
+    .header-banner {
+      background: linear-gradient(135deg, #1a1a2e 0%, #0f3460 100%);
+      color: white;
+      padding: 2.5rem 2rem 2rem;
+      text-align: center;
+      position: relative;
+    }
+    .header-banner::after {
+      content: '';
+      display: block;
+      position: absolute;
+      bottom: -18px; left: 0; right: 0;
+      height: 36px;
+      background: white;
+      border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+    }
+    .header-title { font-size: 1.8rem; font-weight: 700; margin-bottom: 0.3rem; }
+    .header-sub { font-size: 0.95rem; opacity: 0.7; }
+
+    /* ---- Step labels ---- */
+    .step-num {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 34px; height: 34px; border-radius: 50%;
+      background: #0f3460; color: white;
+      font-weight: 700; font-size: 1rem; flex-shrink: 0;
+      margin-right: 0.6rem;
+    }
+    .step-header { display: flex; align-items: center; margin-bottom: 0.9rem; }
+    .step-header h5 { margin: 0; font-size: 1.1rem; font-weight: 600; color: #1a1a2e; }
+
+    /* ---- Drop zone ---- */
+    .drop-zone {
+      border: 3px dashed #b0bec5;
+      border-radius: 14px;
+      padding: 2.5rem 1.5rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all .25s;
+      background: #f8fafc;
+      user-select: none;
+    }
+    .drop-zone:hover, .drop-zone.drag-over {
+      border-color: #0f3460;
+      background: #eef2ff;
+      transform: scale(1.01);
+    }
+    .drop-zone .upload-icon { font-size: 3.2rem; color: #1d6f42; margin-bottom: 0.8rem; }
+    .drop-zone h6 { color: #333; font-size: 1rem; margin-bottom: 0.3rem; }
+    .drop-zone p { font-size: 0.85rem; color: #888; margin: 0; }
+
+    .file-selected {
+      display: none;
+      align-items: center;
+      gap: 0.5rem;
+      margin-top: 0.7rem;
+      color: #1d6f42;
+      font-weight: 600;
+    }
+
+    /* ---- Preview section ---- */
+    .preview-section { display: none; }
+    .preview-section.visible {
+      display: block;
+      animation: slideIn .4s ease;
+    }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .count-badge {
+      background: #e63946; color: white;
+      border-radius: 30px; padding: .25rem .9rem;
+      font-weight: 700; font-size: .9rem;
+      vertical-align: middle;
+    }
+
+    .preview-table thead th {
+      background: #0f3460; color: white;
+      font-weight: 400; font-size: .85rem;
+      white-space: nowrap;
+    }
+    .preview-table tbody td { font-size: .85rem; vertical-align: middle; }
+    .cert-code { font-family: monospace; font-size: .78rem; color: #555; }
+
+    /* ---- Generate button ---- */
+    .btn-gen {
+      background: linear-gradient(135deg, #e63946 0%, #c1121f 100%);
+      color: white; border: none; border-radius: 12px;
+      padding: .9rem 3rem; font-size: 1.15rem; font-weight: 700;
+      transition: all .25s;
+      box-shadow: 0 5px 18px rgba(230,57,70,.35);
+    }
+    .btn-gen:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(230,57,70,.5);
+      color: white;
+    }
+    .btn-gen:disabled { background: #ccc; box-shadow: none; }
+
+    /* ---- Loading overlay ---- */
+    .loading-overlay {
+      display: none; position: fixed;
+      inset: 0; background: rgba(0,0,0,.65);
+      z-index: 9999;
+      flex-direction: column;
+      align-items: center; justify-content: center;
+      color: white;
+    }
+    .loading-overlay.show { display: flex; }
+    .spin-xl { width: 4rem; height: 4rem; border-width: .4rem; }
+
+    /* ---- Divider ---- */
+    .step-divider { border: none; border-top: 2px dashed #e0e0e0; margin: 2rem 0; }
+
+    /* ---- Footer ---- */
+    .footer-note { color: rgba(255,255,255,.4); font-size: .78rem; text-align: center; margin-top: 1.5rem; }
+  </style>
+</head>
+<body>
+
+<!-- Loading overlay -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="spinner-border spin-xl text-light mb-3" role="status"></div>
+  <h5 class="mb-1">กำลังสร้าง Certificate...</h5>
+  <p style="opacity:.7;font-size:.9rem;">กรุณารอสักครู่ อย่าปิดหน้านี้</p>
+</div>
+
+<div class="container" style="max-width:860px">
+
+  <div class="main-card">
+
+    <!-- Header -->
+    <div class="header-banner">
+      <div class="header-title"><i class="fas fa-certificate me-2"></i>ระบบออก Certificate</div>
+      <div class="header-sub">AC Training Center &mdash; สร้างใบ Certificate อัตโนมัติจากไฟล์ Excel</div>
+    </div>
+
+    <div class="p-4 p-md-5" style="padding-top: 2.5rem !important;">
+
+      <!-- ============ STEP 1 ============ -->
+      <div class="step-header">
+        <span class="step-num">1</span>
+        <h5>อัปโหลดไฟล์รายชื่อ Excel</h5>
+      </div>
+
+      <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+        <div class="upload-icon"><i class="fas fa-file-excel"></i></div>
+        <h6>คลิกที่นี่เพื่อเลือกไฟล์</h6>
+        <p>หรือลาก-วางไฟล์ Excel มาที่นี่ก็ได้<br>
+           <span style="color:#aaa">รองรับ .xlsx และ .xls เท่านั้น</span>
+        </p>
+      </div>
+      <input type="file" id="fileInput" accept=".xlsx,.xls" style="display:none">
+
+      <div class="file-selected" id="fileSelected">
+        <i class="fas fa-check-circle fa-lg"></i>
+        <span id="fileSelectedName"></span>
+      </div>
+
+      <!-- Error / Success alerts -->
+      <div class="alert alert-danger d-flex align-items-center mt-3 py-2" id="errorAlert" style="display:none!important" role="alert">
+        <i class="fas fa-exclamation-triangle me-2"></i>
+        <span id="errorMsg"></span>
+      </div>
+      <div class="alert alert-success d-flex align-items-center mt-3 py-2" id="successAlert" style="display:none!important" role="alert">
+        <i class="fas fa-check-circle me-2"></i>
+        <span id="successMsg"></span>
+      </div>
+
+      <hr class="step-divider">
+
+      <!-- ============ STEP 2 — Preview ============ -->
+      <div class="preview-section" id="previewSection">
+        <div class="step-header">
+          <span class="step-num">2</span>
+          <h5>ตรวจสอบรายชื่อ&nbsp;<span class="count-badge" id="certCount">0 คน</span></h5>
+        </div>
+
+        <div class="table-responsive rounded-3 border mb-1">
+          <table class="table table-striped table-hover preview-table mb-0">
+            <thead>
+              <tr>
+                <th style="width:38px">#</th>
+                <th>ชื่อ-นามสกุล</th>
+                <th>เลข Certificate</th>
+                <th>หลักสูตร</th>
+                <th>วันที่อบรม</th>
+                <th>บริษัท</th>
+              </tr>
+            </thead>
+            <tbody id="previewBody"></tbody>
+          </table>
+        </div>
+        <p class="text-muted" style="font-size:.82rem">
+          <i class="fas fa-info-circle me-1"></i>ตรวจสอบข้อมูลให้ถูกต้องก่อนสร้าง Certificate
+        </p>
+
+        <hr class="step-divider">
+
+        <!-- ============ STEP 3 — Generate ============ -->
+        <div class="step-header">
+          <span class="step-num">3</span>
+          <h5>สร้างและดาวน์โหลด Certificate</h5>
+        </div>
+
+        <div class="text-center py-2">
+          <button class="btn btn-gen" id="generateBtn" onclick="generateCertificates()">
+            <i class="fas fa-file-zipper me-2"></i>สร้าง Certificate ทั้งหมด
+          </button>
+          <div class="text-muted mt-3" style="font-size:.83rem">
+            <i class="fas fa-info-circle me-1"></i>
+            ไฟล์จะถูกรวมและดาวน์โหลดเป็น ZIP &bull; 1 ไฟล์ต่อ 1 คน
+          </div>
+        </div>
+
+      </div><!-- /preview-section -->
+
+    </div>
+  </div>
+
+  <div class="footer-note">ระบบนี้พัฒนาสำหรับทีม Training | AC Training Center</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  let selectedFile = null;
+
+  // ── File input ──
+  document.getElementById('fileInput').addEventListener('change', e => {
+    if (e.target.files[0]) handleFile(e.target.files[0]);
+  });
+
+  // ── Drag & drop ──
+  const dz = document.getElementById('dropZone');
+  dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+  dz.addEventListener('drop', e => {
+    e.preventDefault(); dz.classList.remove('drag-over');
+    const f = e.dataTransfer.files[0];
+    if (f && /\.(xlsx|xls)$/i.test(f.name)) handleFile(f);
+    else showError('กรุณาอัปโหลดไฟล์ Excel (.xlsx หรือ .xls) เท่านั้น');
+  });
+
+  function handleFile(file) {
+    selectedFile = file;
+    document.getElementById('fileSelectedName').textContent = file.name;
+    document.getElementById('fileSelected').style.display = 'flex';
+    hideAlerts();
+    loadPreview(file);
+  }
+
+  function loadPreview(file) {
+    const fd = new FormData();
+    fd.append('file', file);
+    fetch('/preview', { method: 'POST', body: fd })
+      .then(r => r.json())
+      .then(data => {
+        if (data.error) { showError(data.error); return; }
+        renderPreview(data.rows, data.count);
+      })
+      .catch(() => showError('เกิดข้อผิดพลาดในการอ่านไฟล์ กรุณาลองใหม่'));
+  }
+
+  function renderPreview(rows, count) {
+    document.getElementById('certCount').textContent = count + ' คน';
+    const tbody = document.getElementById('previewBody');
+    tbody.innerHTML = '';
+    rows.forEach((row, i) => {
+      tbody.insertAdjacentHTML('beforeend', `
+        <tr>
+          <td>${i + 1}</td>
+          <td><strong>${esc(row.name)}</strong></td>
+          <td><span class="cert-code">${esc(row.actc_no)}</span></td>
+          <td>${esc(row.course)}</td>
+          <td>${esc(row.training_date)}</td>
+          <td>${esc(row.company)}</td>
+        </tr>`);
+    });
+    document.getElementById('previewSection').classList.add('visible');
+    // scroll to preview
+    document.getElementById('previewSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function generateCertificates() {
+    if (!selectedFile) return;
+    const overlay = document.getElementById('loadingOverlay');
+    const btn = document.getElementById('generateBtn');
+    overlay.classList.add('show');
+    btn.disabled = true;
+    hideAlerts();
+
+    const fd = new FormData();
+    fd.append('file', selectedFile);
+    fetch('/generate', { method: 'POST', body: fd })
+      .then(res => {
+        if (!res.ok) return res.json().then(d => { throw new Error(d.error || 'เกิดข้อผิดพลาด'); });
+        return res.blob();
+      })
+      .then(blob => {
+        const url = URL.createObjectURL(blob);
+        const a = Object.assign(document.createElement('a'), { href: url, download: `Certificates_${today()}.zip` });
+        document.body.appendChild(a); a.click();
+        URL.revokeObjectURL(url); a.remove();
+        showSuccess('ดาวน์โหลดสำเร็จ! กรุณาตรวจสอบในโฟลเดอร์ Downloads ของคุณ 📁');
+      })
+      .catch(err => showError(err.message || 'เกิดข้อผิดพลาด กรุณาลองใหม่'))
+      .finally(() => { overlay.classList.remove('show'); btn.disabled = false; });
+  }
+
+  // ── Helpers ──
+  function showError(msg)   { setAlert('errorAlert',   'errorMsg',   msg); }
+  function showSuccess(msg) { setAlert('successAlert', 'successMsg', msg); }
+  function setAlert(alertId, msgId, msg) {
+    hideAlerts();
+    document.getElementById(msgId).textContent = msg;
+    document.getElementById(alertId).style.setProperty('display', 'flex', 'important');
+    document.getElementById(alertId).scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+  function hideAlerts() {
+    ['errorAlert','successAlert'].forEach(id =>
+      document.getElementById(id).style.setProperty('display', 'none', 'important')
+    );
+  }
+  function esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function today() {
+    const d = new Date();
+    return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+  }
+</script>
+</body>
+</html>
