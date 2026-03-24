@@ -2,8 +2,9 @@ name: Build Windows EXE
 
 on:
   push:
-    branches: [ main ]
-  workflow_dispatch:
+    tags:
+      - "v*"           # trigger เมื่อ push tag เช่น v1.0, v1.1
+  workflow_dispatch:   # หรือกด Run manually บน GitHub ก็ได้
 
 jobs:
   build:
@@ -24,8 +25,9 @@ jobs:
       - name: Build EXE
         run: pyinstaller ACERT.spec --noconfirm
 
-      - name: Upload EXE
-        uses: actions/upload-artifact@v4
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: ACERT-Windows
-          path: dist/ACERT.exe
+          files: dist/ACERT.exe
+          name: "ACERT ${{ github.ref_name }}"
+          body: "Download ACERT.exe แล้วดับเบิลคลิกได้เลย ไม่ต้องติดตั้งอะไรเพิ่ม"
