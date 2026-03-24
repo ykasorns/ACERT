@@ -48,7 +48,7 @@ POS_COURSE_Y = PAGE_HEIGHT - 491.3
 POS_DATE_Y = PAGE_HEIGHT - 578.4
 POS_ACTCNO_X       = 372.7
 POS_CERTNO_LABEL_Y = 160    # aligned with signature baseline
-POS_ACTCNO_Y       = 130    # aligned with (Training Director, ACinfotec)
+POS_ACTCNO_Y       = 115.5  # aligned with (Training Director, ACinfotec)
 
 COLOR_BLUE = (0.109804, 0.458824, 0.737255)
 COLOR_DARK = (0.137255, 0.121569, 0.12549)
