@@ -47,7 +47,7 @@ POS_NAME_Y = PAGE_HEIGHT - 396.4 + 12
 POS_COURSE_Y = PAGE_HEIGHT - 491.3
 POS_DATE_Y = PAGE_HEIGHT - 578.4
 POS_ACTCNO_X       = 372.7
-POS_CERTNO_LABEL_Y = 160    # aligned with signature baseline
+POS_CERTNO_LABEL_Y = 156    # aligned with signature baseline
 POS_ACTCNO_Y       = 126    # aligned with (Training Director, ACinfotec)
 
 COLOR_BLUE = (0.109804, 0.458824, 0.737255)
@@ -89,9 +89,16 @@ def create_text_overlay(name, actc_no, course, training_date):
     # Cover original "Certification No." baked into template, then redraw at signature level
     c.setFillColorRGB(1, 1, 1)
     c.rect(338, 142, 220, 30, fill=1, stroke=0)
+
+    # Calculate center X based on ACTC number width for proper centering
+    c.setFont("Kanit", 18)
+    actc_width = c.stringWidth(str(actc_no), "Kanit", 18)
+    center_x = POS_ACTCNO_X + (actc_width / 2)
+
+    # "Certification No." centered above ACTC number
     c.setFont("Kanit-Bold", 15)
     c.setFillColorRGB(*COLOR_DARK)
-    c.drawString(POS_ACTCNO_X, POS_CERTNO_LABEL_Y, "Certification No.")
+    c.drawCentredString(center_x, POS_CERTNO_LABEL_Y, "Certification No.")
 
     # ACTC No. — aligned with (Training Director, ACinfotec) level
     c.setFont("Kanit", 18)
