@@ -36,10 +36,47 @@ app = Flask(__name__, template_folder=TEMPLATES_DIR)
 # Load template PDFs into memory at startup
 with open(TEMPLATE_PATH, "rb") as _f:
     TEMPLATE_BYTES = _f.read()
+
+
+def _remove_name_placeholder(pdf_bytes):
+    """Remove 'Name Surename' placeholder text from NCSA template content stream."""
+    import re
+    from pypdf.generic import DecodedStreamObject, NameObject, ArrayObject, IndirectObject
+
+    reader = PdfReader(io.BytesIO(pdf_bytes))
+    page = reader.pages[0]
+    contents = page.get("/Contents")
+    if hasattr(contents, "get_object"):
+        contents = contents.get_object()
+    if hasattr(contents, "__iter__") and not isinstance(contents, (str, bytes)):
+        raw = b"".join(obj.get_object().get_data() for obj in contents)
+    else:
+        raw = contents.get_data()
+
+    # Remove the BT...ET block containing the placeholder name
+    cleaned = re.sub(
+        rb"BT\s*/TT0\s+1\s+Tf\s+33[^\n]*\n\[\(Name Sur\)[^\n]*\]TJ\s*ET",
+        b"",
+        raw,
+    )
+
+    # Rebuild PDF with modified content stream
+    writer = PdfWriter()
+    writer.append(io.BytesIO(pdf_bytes))
+    new_stream = DecodedStreamObject()
+    new_stream.set_data(cleaned)
+    ref = writer._add_object(new_stream)
+    writer.pages[0][NameObject("/Contents")] = ref
+    out = io.BytesIO()
+    writer.write(out)
+    out.seek(0)
+    return out.read()
+
+
 with open(NCSA_16_PATH, "rb") as _f:
-    NCSA_16_BYTES = _f.read()
+    NCSA_16_BYTES = _remove_name_placeholder(_f.read())
 with open(NCSA_19_PATH, "rb") as _f:
-    NCSA_19_BYTES = _f.read()
+    NCSA_19_BYTES = _remove_name_placeholder(_f.read())
 
 # Register Kanit fonts
 pdfmetrics.registerFont(TTFont("Kanit", os.path.join(FONTS_DIR, "Kanit-Regular.ttf")))
@@ -164,10 +201,6 @@ def is_thai(text):
 def generate_ncsa_certificate(name, template_bytes):
     packet = io.BytesIO()
     c = canvas.Canvas(packet, pagesize=(NCSA_WIDTH, NCSA_HEIGHT))
-
-    # Cover "Name Surename" placeholder with white rectangle
-    c.setFillColorRGB(1, 1, 1)
-    c.rect(80, 328, 682, 42, fill=1, stroke=0)
 
     # Draw actual name
     size = fit_text(c, "Kanit", 33, 16, name, 620)
