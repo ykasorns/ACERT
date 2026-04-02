@@ -8,6 +8,8 @@ a = Analysis(
     binaries=[],
     datas=[
         ('AC Certs for print.pdf', '.'),
+        ('NCSA-16March.pdf',       '.'),
+        ('NCSA-19March.pdf',       '.'),
         ('fonts',                  'fonts'),
         ('templates',              'templates'),
     ],

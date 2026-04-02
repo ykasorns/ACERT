@@ -164,9 +164,36 @@
 
     <div class="p-4 p-md-5" style="padding-top: 2.5rem !important;">
 
-      <!-- ============ STEP 1 ============ -->
+      <!-- ============ STEP 0 — Template selector ============ -->
       <div class="step-header">
         <span class="step-num">1</span>
+        <h5>เลือกประเภท Certificate</h5>
+      </div>
+      <div class="d-flex flex-wrap gap-3 mb-4">
+        <div class="form-check border rounded-3 px-4 py-3 flex-fill" style="cursor:pointer;min-width:200px" onclick="selectTemplate('acinfotec')">
+          <input class="form-check-input" type="radio" name="templateType" id="tplACINFOTEC" value="acinfotec" checked>
+          <label class="form-check-label fw-semibold" for="tplACINFOTEC" style="cursor:pointer">
+            ACinfotec<br><small class="text-muted fw-normal">Certificate of Completion</small>
+          </label>
+        </div>
+        <div class="form-check border rounded-3 px-4 py-3 flex-fill" style="cursor:pointer;min-width:200px" onclick="selectTemplate('ncsa_16')">
+          <input class="form-check-input" type="radio" name="templateType" id="tplNCSA16" value="ncsa_16">
+          <label class="form-check-label fw-semibold" for="tplNCSA16" style="cursor:pointer">
+            NCSA — 16 March<br><small class="text-muted fw-normal">Cloud Security Standard for Executive</small>
+          </label>
+        </div>
+        <div class="form-check border rounded-3 px-4 py-3 flex-fill" style="cursor:pointer;min-width:200px" onclick="selectTemplate('ncsa_19')">
+          <input class="form-check-input" type="radio" name="templateType" id="tplNCSA19" value="ncsa_19">
+          <label class="form-check-label fw-semibold" for="tplNCSA19" style="cursor:pointer">
+            NCSA — 19 March<br><small class="text-muted fw-normal">Certify Body Workshop</small>
+          </label>
+        </div>
+      </div>
+      <hr class="step-divider">
+
+      <!-- ============ STEP 2 ============ -->
+      <div class="step-header">
+        <span class="step-num">2</span>
         <h5>อัปโหลดไฟล์รายชื่อ Excel</h5>
       </div>
 
@@ -199,13 +226,13 @@
       <!-- ============ STEP 2 — Preview ============ -->
       <div class="preview-section" id="previewSection">
         <div class="step-header">
-          <span class="step-num">2</span>
+          <span class="step-num">3</span>
           <h5>ตรวจสอบรายชื่อ&nbsp;<span class="count-badge" id="certCount">0 คน</span></h5>
         </div>
 
         <div class="table-responsive rounded-3 border mb-1">
           <table class="table table-striped table-hover preview-table mb-0">
-            <thead>
+            <thead id="previewHead">
               <tr>
                 <th style="width:38px">#</th>
                 <th>ชื่อ-นามสกุล</th>
@@ -224,9 +251,9 @@
 
         <hr class="step-divider">
 
-        <!-- ============ STEP 3 — Generate ============ -->
+        <!-- ============ STEP 4 — Generate ============ -->
         <div class="step-header">
-          <span class="step-num">3</span>
+          <span class="step-num">4</span>
           <h5>สร้างและดาวน์โหลด Certificate</h5>
         </div>
 
@@ -251,6 +278,19 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
   let selectedFile = null;
+  let currentTemplate = 'acinfotec';
+
+  // ── Template selector ──
+  function selectTemplate(val) {
+    currentTemplate = val;
+    document.querySelector(`input[value="${val}"]`).checked = true;
+    // reset file & preview when switching
+    selectedFile = null;
+    document.getElementById('fileSelected').style.display = 'none';
+    document.getElementById('fileInput').value = '';
+    document.getElementById('previewSection').classList.remove('visible');
+    hideAlerts();
+  }
 
   // ── File input ──
   document.getElementById('fileInput').addEventListener('change', e => {
@@ -277,9 +317,11 @@
   }
 
   function loadPreview(file) {
+    const isNCSA = currentTemplate.startsWith('ncsa');
+    const endpoint = isNCSA ? '/preview_ncsa' : '/preview';
     const fd = new FormData();
     fd.append('file', file);
-    fetch('/preview', { method: 'POST', body: fd })
+    fetch(endpoint, { method: 'POST', body: fd })
       .then(r => r.json())
       .then(data => {
         if (data.error) { showError(data.error); return; }
@@ -290,26 +332,33 @@
 
   function renderPreview(rows, count) {
     document.getElementById('certCount').textContent = count + ' คน';
+    const isNCSA = currentTemplate.startsWith('ncsa');
+
+    // Update table headers
+    document.getElementById('previewHead').innerHTML = isNCSA
+      ? `<tr><th style="width:38px">#</th><th>ชื่อ-นามสกุล</th></tr>`
+      : `<tr><th style="width:38px">#</th><th>ชื่อ-นามสกุล</th><th>เลข Certificate</th><th>หลักสูตร</th><th>วันที่อบรม</th><th>บริษัท</th></tr>`;
+
     const tbody = document.getElementById('previewBody');
     tbody.innerHTML = '';
     rows.forEach((row, i) => {
-      tbody.insertAdjacentHTML('beforeend', `
-        <tr>
-          <td>${i + 1}</td>
-          <td><strong>${esc(row.name)}</strong></td>
-          <td><span class="cert-code">${esc(row.actc_no)}</span></td>
-          <td>${esc(row.course)}</td>
-          <td>${esc(row.training_date)}</td>
-          <td>${esc(row.company)}</td>
-        </tr>`);
+      const cells = isNCSA
+        ? `<td><strong>${esc(row.name)}</strong></td>`
+        : `<td><strong>${esc(row.name)}</strong></td>
+           <td><span class="cert-code">${esc(row.actc_no)}</span></td>
+           <td>${esc(row.course)}</td>
+           <td>${esc(row.training_date)}</td>
+           <td>${esc(row.company)}</td>`;
+      tbody.insertAdjacentHTML('beforeend', `<tr><td>${i+1}</td>${cells}</tr>`);
     });
+
     document.getElementById('previewSection').classList.add('visible');
-    // scroll to preview
     document.getElementById('previewSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   function generateCertificates() {
     if (!selectedFile) return;
+    const isNCSA = currentTemplate.startsWith('ncsa');
     const overlay = document.getElementById('loadingOverlay');
     const btn = document.getElementById('generateBtn');
     overlay.classList.add('show');
@@ -318,7 +367,9 @@
 
     const fd = new FormData();
     fd.append('file', selectedFile);
-    fetch('/generate', { method: 'POST', body: fd })
+    if (isNCSA) fd.append('template_id', currentTemplate);
+
+    fetch(isNCSA ? '/generate_ncsa' : '/generate', { method: 'POST', body: fd })
       .then(res => {
         if (!res.ok) return res.json().then(d => { throw new Error(d.error || 'เกิดข้อผิดพลาด'); });
         return res.blob();

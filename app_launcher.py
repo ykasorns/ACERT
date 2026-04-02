@@ -26,14 +26,20 @@ def resource_path(relative_path):
 
 BASE_DIR = resource_path(".")
 TEMPLATE_PATH = resource_path("AC Certs for print.pdf")
+NCSA_16_PATH  = resource_path("NCSA-16March.pdf")
+NCSA_19_PATH  = resource_path("NCSA-19March.pdf")
 FONTS_DIR = resource_path("fonts")
 TEMPLATES_DIR = resource_path("templates")
 
 app = Flask(__name__, template_folder=TEMPLATES_DIR)
 
-# Load template PDF into memory at startup
+# Load template PDFs into memory at startup
 with open(TEMPLATE_PATH, "rb") as _f:
     TEMPLATE_BYTES = _f.read()
+with open(NCSA_16_PATH, "rb") as _f:
+    NCSA_16_BYTES = _f.read()
+with open(NCSA_19_PATH, "rb") as _f:
+    NCSA_19_BYTES = _f.read()
 
 # Register Kanit fonts
 pdfmetrics.registerFont(TTFont("Kanit", os.path.join(FONTS_DIR, "Kanit-Regular.ttf")))
@@ -52,6 +58,13 @@ POS_ACTCNO_Y       = 126    # aligned with (Training Director, ACinfotec)
 
 COLOR_BLUE = (0.109804, 0.458824, 0.737255)
 COLOR_DARK = (0.137255, 0.121569, 0.12549)
+
+# ── NCSA certificate constants (A4 Landscape) ────────────────────────────────
+NCSA_WIDTH  = 841.89
+NCSA_HEIGHT = 595.28
+NCSA_NAME_X = NCSA_WIDTH / 2   # centered
+NCSA_NAME_Y = 332              # baseline (from pdfplumber: 595.28 - 263.49)
+NCSA_NAME_COLOR = (0.2, 0.2, 0.2)
 
 
 def fit_text(c, font, max_size, min_size, text, max_width):
@@ -142,6 +155,118 @@ def parse_excel(file):
             "company": str(row.get("Company", "")).strip(),
         })
     return rows
+
+
+def is_thai(text):
+    return any('\u0e00' <= c <= '\u0e7f' for c in text)
+
+
+def generate_ncsa_certificate(name, template_bytes):
+    packet = io.BytesIO()
+    c = canvas.Canvas(packet, pagesize=(NCSA_WIDTH, NCSA_HEIGHT))
+
+    # Cover "Name Surename" placeholder with white rectangle
+    c.setFillColorRGB(1, 1, 1)
+    c.rect(80, 328, 682, 42, fill=1, stroke=0)
+
+    # Draw actual name
+    size = fit_text(c, "Kanit", 33, 16, name, 620)
+    c.setFont("Kanit", size)
+    c.setFillColorRGB(*NCSA_NAME_COLOR)
+    c.drawCentredString(NCSA_NAME_X, NCSA_NAME_Y, name)
+
+    c.save()
+    packet.seek(0)
+
+    template_reader = PdfReader(io.BytesIO(template_bytes))
+    overlay_reader  = PdfReader(packet)
+    writer = PdfWriter()
+    template_page = template_reader.pages[0]
+    template_page.merge_page(overlay_reader.pages[0])
+    writer.add_page(template_page)
+
+    output = io.BytesIO()
+    writer.write(output)
+    output.seek(0)
+    return output
+
+
+def _get_col(row, *names):
+    for name in names:
+        val = str(row.get(name, "")).strip()
+        if val and val.lower() != "nan":
+            return val
+    return ""
+
+
+def parse_excel_ncsa(file):
+    df = pd.read_excel(file)
+    df.columns = [str(c).strip() for c in df.columns]
+    rows = []
+    for _, row in df.iterrows():
+        title    = _get_col(row, "คำนำหน้า", "Title", "Prefix")
+        fullname = _get_col(row, "ชื่อ-นามสกุล", "ชื่อ นามสกุล", "Name", "ชื่อ")
+        if not fullname:
+            continue
+        # title "-" ถือว่าว่าง
+        if title == "-":
+            title = ""
+        # Thai name → prepend title, English name → ใช้ชื่อตรงๆ ไม่มี title
+        if is_thai(fullname):
+            full_name = f"{title} {fullname}".strip() if title else fullname
+        else:
+            full_name = fullname
+        rows.append({"name": full_name})
+    return rows
+
+
+@app.route("/preview_ncsa", methods=["POST"])
+def preview_ncsa():
+    if "file" not in request.files:
+        return jsonify({"error": "ไม่พบไฟล์"}), 400
+    file = request.files["file"]
+    if not file.filename.lower().endswith((".xlsx", ".xls")):
+        return jsonify({"error": "กรุณาอัปโหลดไฟล์ Excel (.xlsx หรือ .xls) เท่านั้น"}), 400
+    try:
+        rows = parse_excel_ncsa(file)
+        return jsonify({"rows": rows, "count": len(rows)})
+    except Exception as e:
+        return jsonify({"error": f"อ่านไฟล์ไม่ได้: {e}"}), 500
+
+
+@app.route("/generate_ncsa", methods=["POST"])
+def generate_ncsa():
+    if "file" not in request.files:
+        return jsonify({"error": "ไม่พบไฟล์"}), 400
+    file = request.files["file"]
+    if not file.filename.lower().endswith((".xlsx", ".xls")):
+        return jsonify({"error": "กรุณาอัปโหลดไฟล์ Excel (.xlsx หรือ .xls) เท่านั้น"}), 400
+    template_id    = request.form.get("template_id", "ncsa_16")
+    template_bytes = NCSA_16_BYTES if template_id == "ncsa_16" else NCSA_19_BYTES
+    try:
+        rows = parse_excel_ncsa(file)
+        if not rows:
+            return jsonify({"error": "ไม่พบรายชื่อในไฟล์ Excel"}), 400
+
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+            for i, row in enumerate(rows, 1):
+                pdf_data = generate_ncsa_certificate(row["name"], template_bytes)
+                safe_name = "".join(
+                    c for c in row["name"] if c.isalnum() or c in " -_"
+                ).strip().replace(" ", "_")
+                zf.writestr(f"{i:03d}_{safe_name}.pdf", pdf_data.read())
+
+        zip_buffer.seek(0)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        return send_file(
+            zip_buffer,
+            mimetype="application/zip",
+            as_attachment=True,
+            download_name=f"NCSA_Certificates_{timestamp}.zip",
+        )
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/")
