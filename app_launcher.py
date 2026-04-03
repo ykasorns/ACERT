@@ -1,6 +1,8 @@
 import io
 import os
+import re
 import sys
+import unicodedata
 import zipfile
 import threading
 import webbrowser
@@ -286,7 +288,8 @@ def generate_ncsa():
             for i, row in enumerate(rows, 1):
                 pdf_data = generate_ncsa_certificate(row["name"], template_bytes)
                 safe_name = "".join(
-                    c for c in row["name"] if c.isalnum() or c in " -_"
+                    c for c in row["name"]
+                    if unicodedata.category(c)[0] in ("L", "M", "N") or c in " -_"
                 ).strip().replace(" ", "_")
                 zf.writestr(f"{i:03d}_{safe_name}.pdf", pdf_data.read())
 
@@ -340,7 +343,8 @@ def generate():
                     row["name"], row["actc_no"], row["course"], row["training_date"]
                 )
                 safe_name = "".join(
-                    c for c in row["name"] if c.isalnum() or c in " -_"
+                    c for c in row["name"]
+                    if unicodedata.category(c)[0] in ("L", "M", "N") or c in " -_"
                 ).strip().replace(" ", "_")
                 filename = f"{row['actc_no']}_{safe_name}.pdf"
                 zf.writestr(filename, pdf_data.read())
