@@ -173,7 +173,13 @@
         <div class="form-check border rounded-3 px-4 py-3 flex-fill" style="cursor:pointer;min-width:200px" onclick="selectTemplate('acinfotec')">
           <input class="form-check-input" type="radio" name="templateType" id="tplACINFOTEC" value="acinfotec" checked>
           <label class="form-check-label fw-semibold" for="tplACINFOTEC" style="cursor:pointer">
-            ACinfotec<br><small class="text-muted fw-normal">Certificate of Completion</small>
+            ACinfotec (เดิม)<br><small class="text-muted fw-normal">Certificate of Completion</small>
+          </label>
+        </div>
+        <div class="form-check border rounded-3 px-4 py-3 flex-fill" style="cursor:pointer;min-width:200px" onclick="selectTemplate('acinfotec_new')">
+          <input class="form-check-input" type="radio" name="templateType" id="tplACINFOTECNEW" value="acinfotec_new">
+          <label class="form-check-label fw-semibold" for="tplACINFOTECNEW" style="cursor:pointer">
+            ACinfotec (ใหม่)<br><small class="text-muted fw-normal">Certificate of Completion (Dark)</small>
           </label>
         </div>
         <div class="form-check border rounded-3 px-4 py-3 flex-fill" style="cursor:pointer;min-width:200px" onclick="selectTemplate('ncsa_16')">
@@ -317,8 +323,11 @@
   }
 
   function loadPreview(file) {
-    const isNCSA = currentTemplate.startsWith('ncsa');
-    const endpoint = isNCSA ? '/preview_ncsa' : '/preview';
+    const tpl = currentTemplate;
+    let endpoint;
+    if (tpl.startsWith('ncsa'))           endpoint = '/preview_ncsa';
+    else if (tpl === 'acinfotec_new')     endpoint = '/preview_acinfotec_new';
+    else                                  endpoint = '/preview';
     const fd = new FormData();
     fd.append('file', file);
     fetch(endpoint, { method: 'POST', body: fd })
@@ -358,7 +367,8 @@
 
   function generateCertificates() {
     if (!selectedFile) return;
-    const isNCSA = currentTemplate.startsWith('ncsa');
+    const tpl = currentTemplate;
+    const isNCSA = tpl.startsWith('ncsa');
     const overlay = document.getElementById('loadingOverlay');
     const btn = document.getElementById('generateBtn');
     overlay.classList.add('show');
@@ -367,9 +377,14 @@
 
     const fd = new FormData();
     fd.append('file', selectedFile);
-    if (isNCSA) fd.append('template_id', currentTemplate);
+    if (isNCSA) fd.append('template_id', tpl);
 
-    fetch(isNCSA ? '/generate_ncsa' : '/generate', { method: 'POST', body: fd })
+    let endpoint;
+    if (isNCSA)                       endpoint = '/generate_ncsa';
+    else if (tpl === 'acinfotec_new') endpoint = '/generate_acinfotec_new';
+    else                              endpoint = '/generate';
+
+    fetch(endpoint, { method: 'POST', body: fd })
       .then(res => {
         if (!res.ok) return res.json().then(d => { throw new Error(d.error || 'เกิดข้อผิดพลาด'); });
         return res.blob();

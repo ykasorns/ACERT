@@ -27,9 +27,10 @@ def resource_path(relative_path):
 
 
 BASE_DIR = resource_path(".")
-TEMPLATE_PATH = resource_path("AC Certs for print.pdf")
-NCSA_16_PATH  = resource_path("NCSA-16March.pdf")
-NCSA_19_PATH  = resource_path("NCSA-19March.pdf")
+TEMPLATE_PATH     = resource_path("AC Certs for print.pdf")
+TEMPLATE_NEW_PATH = resource_path("ACinfotec-New.pdf")
+NCSA_16_PATH      = resource_path("NCSA-16March.pdf")
+NCSA_19_PATH      = resource_path("NCSA-19March.pdf")
 FONTS_DIR = resource_path("fonts")
 TEMPLATES_DIR = resource_path("templates")
 
@@ -38,6 +39,8 @@ app = Flask(__name__, template_folder=TEMPLATES_DIR)
 # Load template PDFs into memory at startup
 with open(TEMPLATE_PATH, "rb") as _f:
     TEMPLATE_BYTES = _f.read()
+with open(TEMPLATE_NEW_PATH, "rb") as _f:
+    TEMPLATE_NEW_BYTES = _f.read()
 
 
 def _remove_name_placeholder(pdf_bytes):
@@ -97,6 +100,12 @@ POS_ACTCNO_Y       = 126    # aligned with (Training Director, ACinfotec)
 
 COLOR_BLUE = (0.109804, 0.458824, 0.737255)
 COLOR_DARK = (0.137255, 0.121569, 0.12549)
+
+# ── ACinfotec New template constants ─────────────────────────────────────────
+NEW_NAME_Y    = 370   # baseline of name text
+NEW_COURSE_Y  = 265   # baseline of course name text
+NEW_CERTNO_X  = 397   # left edge of cert number (right-side area)
+NEW_CERTNO_Y  = 108   # below "Certification No." label in template
 
 # ── NCSA certificate constants (A4 Landscape) ────────────────────────────────
 NCSA_WIDTH  = 841.89
@@ -167,6 +176,46 @@ def generate_certificate(name, actc_no, course, training_date):
     template_reader = PdfReader(io.BytesIO(TEMPLATE_BYTES))
     overlay_reader = PdfReader(overlay_pdf)
 
+    writer = PdfWriter()
+    template_page = template_reader.pages[0]
+    template_page.merge_page(overlay_reader.pages[0])
+    writer.add_page(template_page)
+
+    output = io.BytesIO()
+    writer.write(output)
+    output.seek(0)
+    return output
+
+
+def generate_acinfotec_new_certificate(name, actc_no, course):
+    """Generate certificate using the new dark-background ACinfotec template."""
+    packet = io.BytesIO()
+    c = canvas.Canvas(packet, pagesize=(PAGE_WIDTH, PAGE_HEIGHT))
+    center_x = PAGE_WIDTH / 2
+    max_width = 440
+
+    # Name — white, centered
+    size = fit_text(c, "Kanit-Bold", 22, 12, name, max_width)
+    c.setFont("Kanit-Bold", size)
+    c.setFillColorRGB(1, 1, 1)
+    c.drawCentredString(center_x, NEW_NAME_Y, name)
+
+    # Course — white, centered
+    size = fit_text(c, "Kanit-Bold", 18, 10, course, max_width)
+    c.setFont("Kanit-Bold", size)
+    c.setFillColorRGB(1, 1, 1)
+    c.drawCentredString(center_x, NEW_COURSE_Y, course)
+
+    # Cert No — white, right side (below "Certification No." label)
+    c.setFont("Kanit", 14)
+    c.setFillColorRGB(1, 1, 1)
+    c.drawString(NEW_CERTNO_X, NEW_CERTNO_Y, str(actc_no))
+
+    c.save()
+    packet.seek(0)
+
+    template_reader = PdfReader(io.BytesIO(TEMPLATE_NEW_BYTES))
+    overlay_reader  = PdfReader(packet)
     writer = PdfWriter()
     template_page = template_reader.pages[0]
     template_page.merge_page(overlay_reader.pages[0])
@@ -300,6 +349,57 @@ def generate_ncsa():
             mimetype="application/zip",
             as_attachment=True,
             download_name=f"NCSA_Certificates_{timestamp}.zip",
+        )
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/preview_acinfotec_new", methods=["POST"])
+def preview_acinfotec_new():
+    if "file" not in request.files:
+        return jsonify({"error": "ไม่พบไฟล์"}), 400
+    file = request.files["file"]
+    if not file.filename.lower().endswith((".xlsx", ".xls")):
+        return jsonify({"error": "กรุณาอัปโหลดไฟล์ Excel (.xlsx หรือ .xls) เท่านั้น"}), 400
+    try:
+        rows = parse_excel(file)
+        return jsonify({"rows": rows, "count": len(rows)})
+    except Exception as e:
+        return jsonify({"error": f"อ่านไฟล์ไม่ได้: {e}"}), 500
+
+
+@app.route("/generate_acinfotec_new", methods=["POST"])
+def generate_acinfotec_new():
+    if "file" not in request.files:
+        return jsonify({"error": "ไม่พบไฟล์"}), 400
+    file = request.files["file"]
+    if not file.filename.lower().endswith((".xlsx", ".xls")):
+        return jsonify({"error": "กรุณาอัปโหลดไฟล์ Excel (.xlsx หรือ .xls) เท่านั้น"}), 400
+    try:
+        rows = parse_excel(file)
+        if not rows:
+            return jsonify({"error": "ไม่พบรายชื่อในไฟล์ Excel"}), 400
+
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+            for row in rows:
+                pdf_data = generate_acinfotec_new_certificate(
+                    row["name"], row["actc_no"], row["course"]
+                )
+                safe_name = "".join(
+                    c for c in row["name"]
+                    if unicodedata.category(c)[0] in ("L", "M", "N") or c in " -_"
+                ).strip().replace(" ", "_")
+                filename = f"{row['actc_no']}_{safe_name}.pdf"
+                zf.writestr(filename, pdf_data.read())
+
+        zip_buffer.seek(0)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        return send_file(
+            zip_buffer,
+            mimetype="application/zip",
+            as_attachment=True,
+            download_name=f"Certificates_New_{timestamp}.zip",
         )
     except Exception as e:
         return jsonify({"error": str(e)}), 500
